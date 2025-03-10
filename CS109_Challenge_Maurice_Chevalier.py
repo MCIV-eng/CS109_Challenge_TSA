@@ -17,6 +17,7 @@ GROWTH_RATE_NEXT_YEAR = .021
 NUM_SAMPLES = 10000
 
 def main():
+    st.set_page_config(layout="wide")
     st.markdown("<h1 style='text-align: center;'>TSA PASSENGER TRAFFIC FORECASTOR</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size:20px;'>This app predicts the number of passengers on a given day up to 360 days in advance!</p>", unsafe_allow_html=True)
     
@@ -103,9 +104,10 @@ def get_rate(date):
     
 
 def plot_figures(day, month):
-    fig_1 = plt.figure(figsize=(8, 4))
+    
+    fig_1 = plt.figure()
     plot_day_factor(day)
-    fig_2 = plt.figure(figsize=(8, 4))
+    fig_2 = plt.figure()
     plot_month_factor(month)
     col1, col2 = st.columns(2)
     
