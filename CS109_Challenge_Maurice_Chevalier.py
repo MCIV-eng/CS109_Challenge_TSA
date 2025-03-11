@@ -70,7 +70,7 @@ def main():
     sample_std_of_price_list = (np.std(sampled_prices, ddof=0))
     
     with ticket_price:
-        current_price = st.number_input("Ticket Price", min_value=0, value=sample_mean_of_price_list)
+        current_price = st.number_input("Ticket Price", min_value=0, value=1000)
     prob_cheaper_tix = stats.norm.cdf(current_price, sample_mean_of_price_list, sample_std_of_price_list)
     st.markdown(f"<p style='text-align: center; font-size:50px; color:blue'>An estimated {pass_forecast} passengers will travel through TSA on {check_date}.</p>", unsafe_allow_html=True)
     st.markdown(f"<p style='text-align: center; font-size:50px; color:red'>There is a {round(prob_cheaper_tix * 100, 2)}% probability of a ticket less than ${current_price} based on historical pricing.</p>", unsafe_allow_html=True)
