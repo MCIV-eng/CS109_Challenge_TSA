@@ -17,7 +17,7 @@ def main():
     st.set_page_config(layout="wide")
     st.markdown("<h1 style='text-align: center;'>TSA PASSENGER TRAFFIC FORECASTOR</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center; font-size:20px;'>This app predicts the number of passengers on a given day up to 360 days in advance! It also shows how likely"
-    "you are to see a cheaper ticket than the current price.</p>", unsafe_allow_html=True)
+    " you are to see a cheaper ticket, in the future, than the current price.</p>", unsafe_allow_html=True)
     
     tsa_df = pd.read_csv("tsa.csv")
     season_df = pd.read_csv("seasonal.csv")
