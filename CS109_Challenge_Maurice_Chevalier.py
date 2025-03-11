@@ -6,6 +6,7 @@ import holidays
 import calendar
 import matplotlib.pyplot as plt
 import streamlit as st
+from scipy import stats
 
 TSA_VOLUME_2024 = 904068577
 GROWTH_RATE_CURRENT_YEAR = .023
@@ -15,17 +16,38 @@ NUM_SAMPLES = 10000
 def main():
     st.set_page_config(layout="wide")
     st.markdown("<h1 style='text-align: center;'>TSA PASSENGER TRAFFIC FORECASTOR</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; font-size:20px;'>This app predicts the number of passengers on a given day up to 360 days in advance!</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-size:20px;'>This app predicts the number of passengers on a given day up to 360 days in advance! It also shows how likely"
+    "you are to see a cheaper ticket than the current price.</p>", unsafe_allow_html=True)
     
-
+    tsa_df = pd.read_csv("tsa.csv")
+    season_df = pd.read_csv("seasonal.csv")
+    prices_df = pd.read_csv("prices.csv")
     # Display centered label
-    st.markdown("<h3 style='text-align: center;'>What date are you expecting to travel?</h3>", unsafe_allow_html=True)
+    #st.markdown("<h3 style='text-align: center;'>What date are you expecting to travel?</h3>", unsafe_allow_html=True)
 
     # Set default date as today and restrict past dates
     today = date.today()
     future_date = today + timedelta(days=360)
-    check_date = st.date_input("Select your travel date: 📅", min_value=today, max_value=future_date)
+    select_date, select_trip, ticket_price = st.columns(3)
 
+
+    season_data = get_season_data(season_df)
+    tsa_data = transform_tsa_data(tsa_df)
+    holiday_map = get_holiday_factor(tsa_data)
+    holiday_factors = standardize_holiday(holiday_map)
+    bootstrap_input = generate_factors(season_data, tsa_data)
+
+    with select_date:
+        select_date = st.date_input("Select your travel date: 📅", min_value=today, max_value=future_date)
+
+    with select_trip:
+        options = ["Transatlantic", "Transpacific", "Latin America", "Caribbean", "Mexico", "Transcontinental", "Hawaii", "Intra West Coast", "Florida"]
+        selected_option = st.selectbox("Choose an option:", options)
+        #st.write(f"You selected: {selected_option}")
+    
+
+
+    check_date = select_date
     # Display selected date
     if check_date:
         formatted_date = check_date.strftime("%B %d, %Y")  # Example: "March 9, 2025"
@@ -35,20 +57,26 @@ def main():
             </h3>
         """, unsafe_allow_html=True)
     
+    
     check_date = check_date.strftime("%m/%d/%Y")
-    tsa_df = pd.read_csv("tsa.csv")
-    season_df = pd.read_csv("seasonal.csv")
-    season_data = get_season_data(season_df)
-    tsa_data = transform_tsa_data(tsa_df)
-    holiday_map = get_holiday_factor(tsa_data)
-    holiday_factors = standardize_holiday(holiday_map)
-    bootstrap_input = generate_factors(season_data, tsa_data)
+    price_month = date_char(check_date)[3]
     day_factors = bootstrap_day_factor(check_date, bootstrap_input)
     month_factors = bootstrap_month_factor(check_date, bootstrap_input)
     pass_forecast = "{:,}".format(predict_volume(check_date, month_factors, day_factors, holiday_factors))
-    st.markdown(f"<p style='text-align: center; font-size:50px; color:blue'>{pass_forecast}</p>", unsafe_allow_html=True)
-    plot_figures(day_factors, month_factors)
+    price_map = get_prices(prices_df)
+    lst_prices = generate_price_lst(price_month, selected_option, price_map)
+    sampled_prices = bootstrap_price(lst_prices)
+    sample_mean_of_price_list = int(np.mean(sampled_prices))
+    sample_std_of_price_list = (np.std(sampled_prices, ddof=0))
     
+    with ticket_price:
+        current_price = st.number_input("Ticket Price", min_value=0, value=sample_mean_of_price_list)
+    prob_cheaper_tix = stats.norm.cdf(current_price, sample_mean_of_price_list, sample_std_of_price_list)
+    st.markdown(f"<p style='text-align: center; font-size:50px; color:blue'>An estimated {pass_forecast} passengers will travel through TSA on {check_date}.</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; font-size:50px; color:red'>There is a {round(prob_cheaper_tix * 100, 2)}% probability of a ticket less than ${current_price} based on historical pricing.</p>", unsafe_allow_html=True)
+    plot_figures(day_factors, month_factors, current_price, sampled_prices)
+    
+
 
 def get_holiday_factor(tsa):
     holiday_dict = {}
@@ -99,31 +127,44 @@ def get_rate(date):
     return 1 + GROWTH_RATE_NEXT_YEAR
     
 
-def plot_figures(day, month):
+def plot_figures(day, month, price, sample_prices):
     
     fig_1 = plt.figure()
     plot_day_factor(day)
     fig_2 = plt.figure()
+    plot_price_prob(price, sample_prices)
+    fig_3 = plt.figure()
     plot_month_factor(month)
-    col1, col2 = st.columns(2)
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.pyplot(fig_1)
     with col2:
         st.pyplot(fig_2)
+    with col3:
+        st.pyplot(fig_3)
 
 def plot_day_factor(factors):
     plt.hist(factors, bins=3, color='purple', edgecolor='black')
-    plt.xlabel("Values")
+    plt.xlabel("Day Factors")
     plt.ylabel("Frequency")
     plt.title("Day Factors Histogram")
 
 
 def plot_month_factor(factors):
-    plt.hist(factors, bins=100, color='green', edgecolor='black')
-    plt.xlabel("Values")
+    plt.hist(factors, bins=100, color='orange', edgecolor='black')
+    plt.xlabel("Month Factors")
     plt.ylabel("Frequency")
     plt.title("Month Factors Histogram")
+
+
+def plot_price_prob(current_price, sampled_prices):
+    plt.hist(sampled_prices, bins=100, color='green', edgecolor='black')
+    plt.xlabel("Prices")
+    plt.ylabel("Frequency")
+    plt.title("Price Histogram")
+    plt.axvline(x=current_price, color='r', linestyle='--', linewidth=2, label="Current Price")
 
 
 def bootstrap_day_factor(date, boot_input_dict):
@@ -293,6 +334,43 @@ def get_day_divisor(date):
     if calendar.isleap(year):
         return 29 / 7
     return 28 / 7
+
+
+def generate_price_lst(month, region, price_map):
+    return price_map[month][region]
+
+
+def bootstrap_price(price_lst):
+    sample =  0
+    sampled_prices = []
+    n_prices = len(price_lst)
+    while sample < NUM_SAMPLES:
+        mean_price = np.mean(random.choices(price_lst, k=n_prices))
+        sampled_prices.append(round(float(mean_price), 2))
+        sample += 1
+    return sampled_prices
+
+
+def get_prices(prices_df):
+    region_price_map = {}
+    region_key = {0: "Transatlantic", 1: "Transpacific", 2: "Latin America", 3: "Caribbean", 4: "Mexico", 5: "Transcontinental", 6: "Hawaii", 7: "Intra West Coast", 8: "Florida"} 
+    clean_prices = prices_df.dropna()
+    for index, region in region_key.items():
+        x = 0
+        for date, price in clean_prices.loc[index].items():
+            if date == "Unnamed: 0":
+                continue
+            cost = int(price.replace(",", ""))
+            first_slash = date.find("/")
+            month = int(date[:first_slash])
+            month_name = get_month(month)
+            if month_name not in region_price_map:
+                region_price_map[month_name] = {region: [cost]}
+            elif region not in region_price_map[month_name]:
+                region_price_map[month_name][region] = [cost] 
+            else:
+                region_price_map[month_name][region].append(cost)
+    return region_price_map
         
 
 if __name__ == '__main__':
